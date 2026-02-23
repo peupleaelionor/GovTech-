@@ -1,0 +1,979 @@
+// GovTech Intelligence Suite - Enterprise Government Management Platform
+// Schema for Government Solutions with Advanced Security and Audit
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// AUTHENTICATION (NextAuth.js)
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  role          UserRole  @default(ANALYST)
+  ministryId    String?
+  departmentId  String?
+  position      String?
+  phone         String?
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  failedLoginAttempts Int   @default(0)
+  lockedUntil   DateTime?
+  passwordChangedAt DateTime?
+  mustChangePassword Boolean @default(false)
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  ministry      Ministry?   @relation(fields: [ministryId], references: [id])
+  department    Department? @relation("DepartmentUsers", fields: [departmentId], references: [id])
+  headedDepartments Department[] @relation("DepartmentHead")
+  projects      Project[]
+  reports       Report[]
+  communications Communication[] @relation("CommunicationSender")
+  receivedCommunications Communication[] @relation("CommunicationReceiver")
+  alerts        Alert[]
+  kpis          KPI[]
+  auditLogs     AuditLog[]
+  createdApprovals Approval[] @relation("ApprovalCreator")
+  receivedApprovals Approval[] @relation("ApprovalReceiver")
+  notificationPreferences NotificationPreference[]
+  permissions    UserPermission[]
+  notifications   Notification[]
+  petitionsSubmitted Petition[] @relation("PetitionSubmitter")
+  petitionsApproved Petition[] @relation("PetitionApprover")
+  initiativesProposed CitizenInitiative[] @relation("InitiativeProposer")
+  initiativesAssigned CitizenInitiative[] @relation("InitiativeAssignee")
+  consultationsPublished PublicConsultation[] @relation("ConsultationPublisher")
+  votesCreated CitizenVote[] @relation("VoteCreator")
+  budgetsPublished BudgetTransparency[] @relation("BudgetPublisher")
+  reportsSubmitted CitizenReport[] @relation("ReportSubmitter")
+  reportsVerified CitizenReport[] @relation("ReportVerifier")
+
+  @@index([email])
+  @@index([ministryId])
+  @@index([role])
+  @@index([isActive])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// RBAC - ROLE BASED ACCESS CONTROL
+// ============================================
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  category    String   // e.g., "projects", "budgets", "users", "reports"
+  action      String   // e.g., "create", "read", "update", "delete", "approve"
+  resource    String?  // e.g., "all", "own", "department", "ministry"
+  createdAt   DateTime @default(now())
+
+  roles       RolePermission[]
+  users       UserPermission[]
+
+  @@index([category])
+  @@index([action])
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  role         UserRole
+  permissionId String
+  createdAt    DateTime   @default(now())
+
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([role, permissionId])
+  @@index([role])
+}
+
+model UserPermission {
+  id           String     @id @default(cuid())
+  userId       String
+  permissionId String
+  granted      Boolean    @default(true)
+  expiresAt    DateTime?
+  createdAt    DateTime   @default(now())
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId])
+  @@index([userId])
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  PRESIDENT
+  PRIME_MINISTER
+  MINISTER
+  DIRECTOR
+  MANAGER
+  ANALYST
+  VIEWER
+  ADMIN
+}
+
+// ============================================
+// AUDIT LOGS
+// ============================================
+
+model AuditLog {
+  id          String       @id @default(cuid())
+  userId      String
+  action      String       // e.g., "CREATE", "UPDATE", "DELETE", "LOGIN", "LOGOUT"
+  entityType  String       // e.g., "Project", "User", "Budget"
+  entityId    String?
+  changes     String?      // JSON string of changes
+  ipAddress   String?
+  userAgent   String?
+  success     Boolean      @default(true)
+  errorMessage String?
+  metadata    String?      // Additional context
+  createdAt   DateTime     @default(now())
+
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model NotificationPreference {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // e.g., "EMAIL", "IN_APP", "SMS", "PUSH"
+  category    String   // e.g., "ALERTS", "REPORTS", "APPROVALS", "SYSTEM"
+  enabled     Boolean  @default(true)
+  frequency   String?  // e.g., "IMMEDIATE", "DAILY", "WEEKLY"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, category])
+  @@index([userId])
+}
+
+// ============================================
+// WORKFLOW & APPROVALS
+// ============================================
+
+model Workflow {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  entityType  String       // e.g., "PROJECT", "BUDGET", "REPORT"
+  stages      String       // JSON array of stage definitions
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  approvals   Approval[]
+
+  @@index([entityType])
+  @@index([isActive])
+}
+
+model Approval {
+  id          String       @id @default(cuid())
+  workflowId  String
+  entityType  String       // e.g., "PROJECT", "BUDGET"
+  entityId    String
+  currentStage String
+  status      ApprovalStatus @default(PENDING)
+  requesterId String
+  approverId  String?
+  comments    String?
+  metadata    String?      // JSON
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+
+  workflow    Workflow     @relation(fields: [workflowId], references: [id])
+  requester   User         @relation("ApprovalCreator", fields: [requesterId], references: [id])
+  approver    User?        @relation("ApprovalReceiver", fields: [approverId], references: [id])
+  projects    Project[]    @relation("ProjectApprovals")
+
+  @@index([entityType, entityId])
+  @@index([requesterId])
+  @@index([approverId])
+  @@index([status])
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+// ============================================
+// SYSTEM SETTINGS
+// ============================================
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  category    String   // e.g., "SECURITY", "NOTIFICATION", "BACKUP", "INTEGRATION"
+  description String?
+  isPublic    Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+
+  @@index([category])
+  @@index([key])
+}
+
+// ============================================
+// CORE MODELS
+// ============================================
+
+model Ministry {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  description String?
+  budget      Float    @default(0)
+  address     String?
+  phone       String?
+  email       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  departments Department[]
+  projects    Project[]
+  kpis        KPI[]
+  reports     Report[]
+  alerts      Alert[]
+  petitions   Petition[]
+  initiatives CitizenInitiative[]
+  consultations PublicConsultation[]
+  votes       CitizenVote[]
+  budgetTransparencies BudgetTransparency[]
+  citizenReports CitizenReport[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  code        String
+  ministryId  String
+  description String?
+  headId      String?
+  budget      Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ministry    Ministry        @relation(fields: [ministryId], references: [id])
+  head        User?           @relation("DepartmentHead", fields: [headId], references: [id])
+  users       User[]          @relation("DepartmentUsers")
+  projects    Project[]
+  petitions   Petition[]
+  consultations PublicConsultation[]
+  votes       CitizenVote[]
+  citizenReports CitizenReport[]
+
+  @@index([ministryId])
+  @@unique([ministryId, code])
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  code        String
+  description String
+  status      ProjectStatus @default(PLANNED)
+  priority    Priority      @default(MEDIUM)
+  startDate   DateTime?
+  endDate     DateTime?
+  progress    Float         @default(0)
+  budget      Float
+  spent       Float         @default(0)
+  ministryId  String
+  departmentId String?
+  managerId   String?
+  location    String?
+  requiresApproval Boolean @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  ministry    Ministry   @relation(fields: [ministryId], references: [id])
+  department  Department? @relation(fields: [departmentId], references: [id])
+  manager     User?      @relation(fields: [managerId], references: [id])
+  budgets     Budget[]
+  reports     Report[]
+  kpis        KPI[]
+  approvals   Approval[]  @relation("ProjectApprovals")
+  budgetTransparencies BudgetTransparency[]
+
+  @@index([ministryId])
+  @@index([status])
+  @@index([priority])
+  @@unique([ministryId, code])
+}
+
+enum ProjectStatus {
+  PLANNED
+  PENDING_APPROVAL
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+  DELAYED
+  UNDER_REVIEW
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Budget {
+  id          String   @id @default(cuid())
+  projectId   String
+  category    String
+  allocated   Float
+  spent       Float    @default(0)
+  year        Int
+  quarter     Int?
+  description String?
+  requiresApproval Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([year])
+}
+
+model Report {
+  id          String       @id @default(cuid())
+  title       String
+  type        ReportType
+  content     String
+  summary     String?
+  aiGenerated Boolean      @default(true)
+  format      String       @default("PDF")
+  projectId   String?
+  ministryId  String?
+  authorId    String
+  status      ReportStatus @default(DRAFT)
+  requiresApproval Boolean @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  project     Project? @relation(fields: [projectId], references: [id])
+  ministry    Ministry? @relation(fields: [ministryId], references: [id])
+  author      User     @relation(fields: [authorId], references: [id])
+
+  @@index([projectId])
+  @@index([ministryId])
+  @@index([type])
+  @@index([status])
+}
+
+enum ReportType {
+  QUARTERLY
+  ANNUAL
+  PROJECT_STATUS
+  BUDGET_ANALYSIS
+  KPI_SUMMARY
+  STRATEGIC
+  CRISIS_MANAGEMENT
+  COMPLIANCE
+  AUDIT
+}
+
+enum ReportStatus {
+  DRAFT
+  PENDING_APPROVAL
+  REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+  REJECTED
+}
+
+model KPI {
+  id          String   @id @default(cuid())
+  name        String
+  code        String
+  description String?
+  category    String
+  target      Float
+  current     Float
+  unit        String?
+  frequency   String   @default("monthly")
+  projectId   String?
+  ministryId  String?
+  ownerId     String?
+  year        Int
+  month       Int?
+  trend       String   @default("stable")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project?  @relation(fields: [projectId], references: [id])
+  ministry    Ministry? @relation(fields: [ministryId], references: [id])
+  owner       User?     @relation(fields: [ownerId], references: [id])
+
+  @@index([projectId])
+  @@index([ministryId])
+  @@index([year])
+  @@index([category])
+  @@index([isActive])
+  @@unique([code, year, month])
+}
+
+model Communication {
+  id          String            @id @default(cuid())
+  subject     String
+  content     String
+  type        CommunicationType
+  priority    Priority          @default(MEDIUM)
+  senderId    String
+  receiverId  String
+  isRead      Boolean           @default(false)
+  status      String            @default("sent")
+  metadata    String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  sender      User              @relation("CommunicationSender", fields: [senderId], references: [id])
+  receiver    User              @relation("CommunicationReceiver", fields: [receiverId], references: [id])
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([isRead])
+  @@index([status])
+}
+
+enum CommunicationType {
+  OFFICIAL
+  URGENT
+  ALERT
+  REQUEST
+  ANNOUNCEMENT
+  REPORT
+  APPROVAL_REQUEST
+}
+
+model Alert {
+  id          String     @id @default(cuid())
+  title       String
+  message     String
+  type        AlertType
+  severity    Severity   @default(MEDIUM)
+  source      String?
+  isRead      Boolean    @default(false)
+  isResolved  Boolean    @default(false)
+  userId      String?
+  ministryId  String?
+  projectId   String?
+  metadata    String?
+  expiresAt   DateTime?
+  resolvedAt  DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user        User?      @relation(fields: [userId], references: [id])
+  ministry    Ministry?  @relation(fields: [ministryId], references: [id])
+
+  @@index([userId])
+  @@index([ministryId])
+  @@index([projectId])
+  @@index([isRead])
+  @@index([type])
+  @@index([severity])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String
+  title       String
+  message     String
+  metadata    String?
+  isRead      Boolean  @default(false)
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([type])
+  @@index([createdAt])
+}
+
+enum AlertType {
+  BUDGET
+  DEADLINE
+  KPI
+  SECURITY
+  SYSTEM
+  PROJECT
+  COMPLIANCE
+  APPROVAL
+  AUDIT
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ============================================
+// PHASE 13: CITIZEN GOVERNANCE & PARTICIPATION
+// ============================================
+
+model Petition {
+  id          String          @id @default(cuid())
+  title       String
+  description String
+  content     String
+  category    String          // e.g., "INFRASTRUCTURE", "HEALTH", "EDUCATION", "JUSTICE", "ENVIRONMENT"
+  status      PetitionStatus  @default(DRAFT)
+  priority    Priority        @default(MEDIUM)
+  signatures  Int             @default(0)
+  targetSignatures Int?
+  submittedBy String
+  ministryId  String?
+  departmentId String?
+  approvedBy  String?
+  rejectedAt  DateTime?
+  approvedAt  DateTime?
+  response    String?         // Government response
+  metadata    String?
+  expiresAt   DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  submittedByUser User?    @relation("PetitionSubmitter", fields: [submittedBy], references: [id])
+  ministry        Ministry? @relation(fields: [ministryId], references: [id])
+  department      Department? @relation(fields: [departmentId], references: [id])
+  approvedByUser  User?    @relation("PetitionApprover", fields: [approvedBy], references: [id])
+  signaturesList  PetitionSignature[]
+
+  @@index([submittedBy])
+  @@index([status])
+  @@index([category])
+  @@index([ministryId])
+  @@index([createdAt])
+}
+
+enum PetitionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  COLLECTING_SIGNATURES
+  SIGNED
+  APPROVED
+  REJECTED
+  IMPLEMENTED
+  ARCHIVED
+}
+
+model PetitionSignature {
+  id         String   @id @default(cuid())
+  petitionId String
+  userId     String
+  name       String
+  email      String?
+  phone      String?
+  comment    String?
+  signedAt   DateTime @default(now())
+  ipAddress  String?
+
+  petition    Petition @relation(fields: [petitionId], references: [id], onDelete: Cascade)
+
+  @@unique([petitionId, userId])
+  @@index([petitionId])
+  @@index([userId])
+}
+
+model CitizenInitiative {
+  id          String            @id @default(cuid())
+  title       String
+  description String
+  proposal    String            // Detailed proposal
+  category    String
+  status      InitiativeStatus  @default(PROPOSAL)
+  priority    Priority          @default(MEDIUM)
+  supporters  Int               @default(0)
+  budgetEstimate Float?
+  timeline    String?
+  proposedBy  String
+  ministryId  String?
+  assignedTo  String?
+  approvedAt  DateTime?
+  response    String?
+  progress    Float             @default(0)
+  completedAt DateTime?
+  metadata    String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  proposedByUser User?    @relation("InitiativeProposer", fields: [proposedBy], references: [id])
+  ministry        Ministry? @relation(fields: [ministryId], references: [id])
+  assignedToUser  User?    @relation("InitiativeAssignee", fields: [assignedTo], references: [id])
+  supportersList  InitiativeSupporter[]
+
+  @@index([proposedBy])
+  @@index([status])
+  @@index([category])
+  @@index([ministryId])
+  @@index([createdAt])
+}
+
+enum InitiativeStatus {
+  PROPOSAL
+  UNDER_REVIEW
+  APPROVED
+  FUNDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  ARCHIVED
+}
+
+model InitiativeSupporter {
+  id          String   @id @default(cuid())
+  initiativeId String
+  userId      String
+  supportType String   // "VOTE", "CONTRIBUTION", "ENDORSEMENT"
+  amount      Float?   // If financial contribution
+  comment     String?
+  supportedAt DateTime @default(now())
+
+  initiative  CitizenInitiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+
+  @@unique([initiativeId, userId, supportType])
+  @@index([initiativeId])
+  @@index([userId])
+}
+
+model PublicConsultation {
+  id          String            @id @default(cuid())
+  title       String
+  description String
+  content     String            // Policy/document for consultation
+  type        ConsultationType
+  status      ConsultationStatus @default(DRAFT)
+  priority    Priority          @default(MEDIUM)
+  responses   Int               @default(0)
+  targetResponses Int?
+  publishedBy String
+  ministryId  String?
+  departmentId String?
+  startDate   DateTime
+  endDate     DateTime
+  summary     String?           // AI-generated summary of responses
+  decision    String?           // Government decision based on consultation
+  impact      String?           // Impact assessment
+  metadata    String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  publishedByUser User?      @relation("ConsultationPublisher", fields: [publishedBy], references: [id])
+  ministry        Ministry?  @relation(fields: [ministryId], references: [id])
+  department      Department? @relation(fields: [departmentId], references: [id])
+  responseList    ConsultationResponse[]
+
+  @@index([publishedBy])
+  @@index([status])
+  @@index([type])
+  @@index([ministryId])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+enum ConsultationType {
+  POLICY
+  REGULATION
+  BUDGET
+  INFRASTRUCTURE
+  SOCIAL_PROGRAM
+  LAW_REFORM
+  STRATEGIC_PLAN
+}
+
+enum ConsultationStatus {
+  DRAFT
+  PUBLISHED
+  COLLECTING_RESPONSES
+  CLOSED
+  UNDER_ANALYSIS
+  DECISION_PENDING
+  DECIDED
+  ARCHIVED
+}
+
+model ConsultationResponse {
+  id            String   @id @default(cuid())
+  consultationId String
+  userId        String
+  content       String
+  sentiment     String?  // "POSITIVE", "NEGATIVE", "NEUTRAL"
+  rating        Int?     // 1-5 scale
+  category      String?
+  metadata      String?
+  respondedAt   DateTime @default(now())
+  analyzedAt    DateTime?
+
+  consultation  PublicConsultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+
+  @@index([consultationId])
+  @@index([userId])
+  @@index([sentiment])
+}
+
+model CitizenVote {
+  id          String     @id @default(cuid())
+  title       String
+  description String
+  type        VoteType
+  status      VoteStatus @default(PENDING)
+  priority    Priority   @default(HIGH)
+  options     String     // JSON array of voting options
+  totalVotes  Int        @default(0)
+  createdBy   String
+  ministryId  String?
+  departmentId String?
+  scope       String     // "NATIONAL", "REGIONAL", "MUNICIPAL", "MINISTRY"
+  startDate   DateTime
+  endDate     DateTime
+  result      String?    // JSON with results
+  winner      String?
+  metadata    String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  createdByUser User?      @relation("VoteCreator", fields: [createdBy], references: [id])
+  ministry       Ministry?  @relation(fields: [ministryId], references: [id])
+  department     Department? @relation(fields: [departmentId], references: [id])
+  votesList      VoteRecord[]
+
+  @@index([createdBy])
+  @@index([status])
+  @@index([type])
+  @@index([ministryId])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+enum VoteType {
+  BUDGET
+  POLICY
+  PROJECT
+  LEADERSHIP
+  REFERENDUM
+  SURVEY
+}
+
+enum VoteStatus {
+  PENDING
+  ACTIVE
+  CLOSED
+  CANCELLED
+  COUNTED
+  PUBLISHED
+}
+
+model VoteRecord {
+  id        String   @id @default(cuid())
+  voteId    String
+  userId    String
+  option    String
+  ipAddress String?
+  votedAt   DateTime @default(now())
+
+  vote      CitizenVote @relation(fields: [voteId], references: [id], onDelete: Cascade)
+
+  @@unique([voteId, userId])
+  @@index([voteId])
+  @@index([userId])
+}
+
+model BudgetTransparency {
+  id          String                @id @default(cuid())
+  title       String
+  description String
+  category    String                // "INFRASTRUCTURE", "HEALTH", "EDUCATION", "DEFENSE", etc.
+  type        BudgetType
+  fiscalYear  Int
+  quarter     Int?
+  amount      Float
+  spent       Float                 @default(0)
+  status      BudgetTransparencyStatus @default(PROPOSED)
+  priority    Priority              @default(MEDIUM)
+  breakdown   String                // JSON breakdown by sub-categories
+  metrics     String?               // JSON with performance metrics
+  ministryId  String
+  projectId   String?
+  publishedBy String
+  visibility  String                @default("PUBLIC") // "PUBLIC", "INTERNAL", "RESTRICTED"
+  documents   String?               // JSON array of document URLs
+  feedback    String?               // Summary of public feedback
+  approvedAt  DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  ministry    Ministry  @relation(fields: [ministryId], references: [id])
+  project     Project?  @relation(fields: [projectId], references: [id])
+  publishedByUser User?  @relation("BudgetPublisher", fields: [publishedBy], references: [id])
+
+  @@index([ministryId])
+  @@index([projectId])
+  @@index([fiscalYear])
+  @@index([status])
+  @@index([type])
+  @@index([category])
+}
+
+enum BudgetType {
+  CAPITAL_EXPENDITURE
+  OPERATING_EXPENDITURE
+  TRANSFER_PAYMENT
+  DEBT_SERVICE
+  REVENUE
+  GRANT
+  LOAN
+}
+
+enum BudgetTransparencyStatus {
+  PROPOSED
+  APPROVED
+  ACTIVE
+  COMPLETED
+  ON_HOLD
+  UNDER_REVIEW
+  AUDITED
+  ARCHIVED
+}
+
+model CitizenReport {
+  id          String              @id @default(cuid())
+  title       String
+  description String
+  content     String
+  category    String              // "CORRUPTION", "INFRASTRUCTURE", "HEALTH", "EDUCATION", "SAFETY", "ENVIRONMENT"
+  type        ReportType
+  status      CitizenReportStatus @default(SUBMITTED)
+  priority    Priority            @default(MEDIUM)
+  severity    Severity            @default(MEDIUM)
+  submittedBy String
+  ministryId  String?
+  departmentId String?
+  location    String?
+  attachments String?             // JSON array of attachment URLs
+  isAnonymous Boolean             @default(false)
+  verified    Boolean             @default(false)
+  verifiedBy  String?
+  verifiedAt  DateTime?
+  response    String?
+  resolvedAt  DateTime?
+  actionTaken String?
+  impact      String?             // Impact of the report
+  metadata    String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  submittedByUser User?     @relation("ReportSubmitter", fields: [submittedBy], references: [id])
+  ministry        Ministry? @relation(fields: [ministryId], references: [id])
+  department      Department? @relation(fields: [departmentId], references: [id])
+  verifiedByUser  User?     @relation("ReportVerifier", fields: [verifiedBy], references: [id])
+
+  @@index([submittedBy])
+  @@index([status])
+  @@index([category])
+  @@index([ministryId])
+  @@index([severity])
+  @@index([verified])
+  @@index([createdAt])
+}
+
+enum CitizenReportStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  VERIFIED
+  INVESTIGATING
+  RESOLVED
+  REJECTED
+  ARCHIVED
+}
