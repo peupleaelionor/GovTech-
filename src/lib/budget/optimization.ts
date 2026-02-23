@@ -281,7 +281,7 @@ export const BUDGET_OPTIMIZATION_DATA: Record<string, BudgetOptimization> = {
             'Reduce inefficiencies in procurement',
             'Improve asset management',
             'Optimize training programs',
-          },
+          ],
         },
       ],
       reallocationOpportunities: [

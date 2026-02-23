@@ -66,6 +66,11 @@ export default function Home() {
           population: "5.5M",
           hdi: "0.569"
         },
+      },
+      cta: {
+        title: "Prêt à Transformer la Gouvernance ?",
+        description: "Rejoignez les nations africaines qui modernisent leur gouvernance avec notre plateforme IA.",
+        button: "Commencer Maintenant"
       }
     },
     en: {
@@ -107,12 +112,23 @@ export default function Home() {
           population: "5.5M",
           hdi: "0.569"
         },
+      },
+      cta: {
+        title: "Ready to Transform Governance?",
+        description: "Join African nations modernizing their governance with our AI platform.",
+        button: "Get Started"
       }
     }
   }
 
   const t = content[currentLang]
-  const countryData = content.countries as any
+
+  const countryFlags: Record<string, string> = {
+    cameroon: '🇨🇲',
+    rdc: '🇨🇩',
+    gabon: '🇬🇦',
+    congo: '🇨🇬',
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-black">
@@ -224,10 +240,10 @@ export default function Home() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-            {Object.entries(countryData).map(([code, data]: [index, entry]: any]) => (
-              <Card key={index} className="text-center hover:shadow-lg transition-shadow cursor-pointer border-2 border-black hover:bg-black hover:text-white hover:border-black transition-all">
+            {Object.entries(t.countries).filter(([key]) => !['title', 'subtitle'].includes(key)).map(([code, entry]: [string, any]) => (
+              <Card key={code} className="text-center hover:shadow-lg transition-shadow cursor-pointer border-2 border-black hover:bg-black hover:text-white hover:border-black transition-all">
                 <CardHeader>
-                  <div className="text-4xl mb-2">{getFlag(code)}</div>
+                  <div className="text-4xl mb-2">{countryFlags[code] || '🌍'}</div>
                   <CardTitle className="text-lg">{entry.title}</CardTitle>
                   <CardDescription className="text-sm text-gray-600">
                     {entry.description}
@@ -272,7 +288,6 @@ export default function Home() {
               {currentLang === 'fr' 
                 ? 'Une vue complète de la gouvernance de votre nation' 
                 : 'A complete view of your nation\'s governance'}
-              }
             </p>
           </div>
 
@@ -405,7 +420,7 @@ export default function Home() {
                           />
                         </div>
                       </div>
-                    ))
+                    ))}
                   </div>
                 </TabsContent>
 
@@ -461,7 +476,7 @@ export default function Home() {
                           </div>
                         </CardContent>
                       </Card>
-                    ))
+                    ))}
                   </div>
                 </TabsContent>
 
@@ -505,7 +520,7 @@ export default function Home() {
                           </Button>
                         </div>
                       </Card>
-                    ))
+                    ))}
                   </div>
                 </TabsContent>
               </Tabs>
