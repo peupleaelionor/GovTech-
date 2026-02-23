@@ -70,7 +70,7 @@ Open [http://localhost:3000](http://localhost:3000) to view the site.
 
 4. Deploy!
 
-> **Note:** For production, use a hosted database (e.g., [Turso](https://turso.tech), [PlanetScale](https://planetscale.com), or [Neon](https://neon.tech)) instead of SQLite.
+> **Note:** For production, use a hosted database (e.g., [Turso](https://turso.tech) or [Neon](https://neon.tech)) instead of SQLite.
 
 ---
 
