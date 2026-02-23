@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
-import { checkRateLimit, RATE_LIMITS, getClientIP } from '@/lib/security/rate-limiter'
-import { logSecurityEvent } from '@/lib/security/audit-logger'
-import { AuditAction } from '@/lib/security/audit-logger'
 
 /**
  * Routes that don't require authentication
@@ -33,46 +30,18 @@ const superAdminRoutes = [
 
 /**
  * Middleware function
+ * Note: Runs in Vercel Edge Runtime - no database/Prisma access
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Skip rate limiting for static files and Next.js internals
+  // Skip for static files and Next.js internals
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/static') ||
     pathname.includes('.')
   ) {
     return NextResponse.next()
-  }
-
-  // Get client IP
-  const ip = getClientIP(request)
-
-  // Apply rate limiting to API routes
-  if (pathname.startsWith('/api/')) {
-    // Skip rate limiting for auth routes (handled separately)
-    if (!pathname.startsWith('/api/auth')) {
-      const rateLimitResult = await checkRateLimit(request, RATE_LIMITS.API)
-      
-      if (!rateLimitResult.allowed) {
-        // Log rate limit exceeded
-        const token = await getToken({ req: request })
-        if (token) {
-          await logSecurityEvent(
-            token.sub as string,
-            AuditAction.RATE_LIMIT_EXCEEDED,
-            {
-              ipAddress: ip,
-              userAgent: request.headers.get('user-agent') || undefined,
-              metadata: { path: pathname },
-            }
-          )
-        }
-        
-        return rateLimitResult.response!
-      }
-    }
   }
 
   // Check if route is public
@@ -107,17 +76,6 @@ export async function middleware(request: NextRequest) {
       userRole !== 'PRESIDENT' &&
       userRole !== 'PRIME_MINISTER'
     ) {
-      // Log unauthorized access attempt
-      await logSecurityEvent(
-        token.sub as string,
-        AuditAction.UNAUTHORIZED_ACCESS,
-        {
-          ipAddress: ip,
-          userAgent: request.headers.get('user-agent') || undefined,
-          metadata: { path: pathname, requiredRole: 'ADMIN' },
-        }
-      )
-
       return new NextResponse(
         JSON.stringify({ error: 'Forbidden' }),
         { 
@@ -133,17 +91,6 @@ export async function middleware(request: NextRequest) {
     const userRole = token.role as string
     
     if (userRole !== 'SUPER_ADMIN') {
-      // Log unauthorized access attempt
-      await logSecurityEvent(
-        token.sub as string,
-        AuditAction.UNAUTHORIZED_ACCESS,
-        {
-          ipAddress: ip,
-          userAgent: request.headers.get('user-agent') || undefined,
-          metadata: { path: pathname, requiredRole: 'SUPER_ADMIN' },
-        }
-      )
-
       return new NextResponse(
         JSON.stringify({ error: 'Forbidden' }),
         { 
