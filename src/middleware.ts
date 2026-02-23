@@ -9,6 +9,7 @@ import { AuditAction } from '@/lib/security/audit-logger'
  * Routes that don't require authentication
  */
 const publicRoutes = [
+  '/',
   '/auth/signin',
   '/auth/error',
   '/api/auth',
@@ -75,7 +76,9 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check if route is public
-  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
+  const isPublicRoute = publicRoutes.some(route => 
+    route === '/' ? pathname === '/' : pathname.startsWith(route)
+  )
 
   if (isPublicRoute) {
     return NextResponse.next()

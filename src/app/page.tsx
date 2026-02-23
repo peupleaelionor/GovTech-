@@ -21,6 +21,16 @@ import {
   X
 } from 'lucide-react'
 
+function getFlag(code: string): string {
+  const flags: Record<string, string> = {
+    cameroon: '🇨🇲',
+    rdc: '🇨🇩',
+    gabon: '🇬🇦',
+    congo: '🇨🇬',
+  }
+  return flags[code] || '🌍'
+}
+
 export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [currentLang, setCurrentLang] = useState<'fr' | 'en'>('fr')
@@ -66,6 +76,11 @@ export default function Home() {
           population: "5.5M",
           hdi: "0.569"
         },
+      },
+      cta: {
+        title: "Prêt à Transformer Votre Gouvernance ?",
+        description: "Rejoignez les nations africaines qui modernisent leur gouvernance avec l'intelligence artificielle.",
+        button: "Commencer Maintenant"
       }
     },
     en: {
@@ -107,12 +122,22 @@ export default function Home() {
           population: "5.5M",
           hdi: "0.569"
         },
+      },
+      cta: {
+        title: "Ready to Transform Your Governance?",
+        description: "Join African nations modernizing their governance with artificial intelligence.",
+        button: "Get Started Now"
       }
     }
   }
 
   const t = content[currentLang]
-  const countryData = content.countries as any
+  const countryList = [
+    { code: 'cameroon', ...t.countries.cameroon },
+    { code: 'rdc', ...t.countries.rdc },
+    { code: 'gabon', ...t.countries.gabon },
+    { code: 'congo', ...t.countries.congo },
+  ]
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-black">
@@ -224,12 +249,12 @@ export default function Home() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-            {Object.entries(countryData).map(([code, data]: [index, entry]: any]) => (
-              <Card key={index} className="text-center hover:shadow-lg transition-shadow cursor-pointer border-2 border-black hover:bg-black hover:text-white hover:border-black transition-all">
+            {countryList.map((entry) => (
+              <Card key={entry.code} className="text-center hover:shadow-lg cursor-pointer border-2 border-black hover:bg-black hover:text-white hover:border-black transition-all">
                 <CardHeader>
-                  <div className="text-4xl mb-2">{getFlag(code)}</div>
+                  <div className="text-4xl mb-2">{getFlag(entry.code)}</div>
                   <CardTitle className="text-lg">{entry.title}</CardTitle>
-                  <CardDescription className="text-sm text-gray-600">
+                  <CardDescription className="text-sm">
                     {entry.description}
                   </CardDescription>
                 </CardHeader>
@@ -247,11 +272,11 @@ export default function Home() {
                     <span className="font-bold">{entry.hdi}</span>
                   </div>
                   <Button 
-                    onClick={() => setSelectedCountry(code.toUpperCase())}
+                    onClick={() => setSelectedCountry(entry.code.toUpperCase())}
                     className="w-full"
-                    variant={selectedCountry === code.toUpperCase() ? "default" : "outline"}
+                    variant={selectedCountry === entry.code.toUpperCase() ? "default" : "outline"}
                   >
-                    {selectedCountry === code.toUpperCase() ? 'Sélectionné' : 'Sélectionner'}
+                    {selectedCountry === entry.code.toUpperCase() ? 'Sélectionné' : 'Sélectionner'}
                   </Button>
                 </CardContent>
               </Card>
@@ -272,7 +297,6 @@ export default function Home() {
               {currentLang === 'fr' 
                 ? 'Une vue complète de la gouvernance de votre nation' 
                 : 'A complete view of your nation\'s governance'}
-              }
             </p>
           </div>
 
@@ -405,7 +429,7 @@ export default function Home() {
                           />
                         </div>
                       </div>
-                    ))
+                    ))}
                   </div>
                 </TabsContent>
 
@@ -461,7 +485,7 @@ export default function Home() {
                           </div>
                         </CardContent>
                       </Card>
-                    ))
+                    ))}
                   </div>
                 </TabsContent>
 
@@ -505,7 +529,7 @@ export default function Home() {
                           </Button>
                         </div>
                       </Card>
-                    ))
+                    ))}
                   </div>
                 </TabsContent>
               </Tabs>

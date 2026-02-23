@@ -188,7 +188,7 @@ export const AFRICAN_COUNTRIES: Record<string, CountryConfig> = {
       official: ['fr'],
       working: ['fr', 'ln', 'kg'],
     },
-    timezone: Africa/Brazzaville,
+    timezone: 'Africa/Brazzaville',
     region: 'Central Africa',
     callingCode: '+242',
     government: {

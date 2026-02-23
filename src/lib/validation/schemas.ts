@@ -105,7 +105,7 @@ export type UpdateDepartmentInput = z.infer<typeof updateDepartmentSchema>
 // PROJECT SCHEMAS
 // ============================================
 
-export const createProjectSchema = z.object({
+const createProjectBaseSchema = z.object({
   name: z.string().min(5, 'Project name must be at least 5 characters').max(200),
   code: z.string().min(2).max(20).toUpperCase(),
   description: z.string().min(10, 'Description must be at least 10 characters').max(5000),
@@ -119,7 +119,9 @@ export const createProjectSchema = z.object({
   managerId: z.string().optional(),
   location: z.string().max(500).optional(),
   requiresApproval: z.boolean().optional(),
-}).refine((data) => {
+})
+
+export const createProjectSchema = createProjectBaseSchema.refine((data) => {
   if (data.startDate && data.endDate) {
     return new Date(data.startDate) <= new Date(data.endDate)
   }
@@ -131,7 +133,7 @@ export const createProjectSchema = z.object({
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
 
-export const updateProjectSchema = createProjectSchema.partial().extend({
+export const updateProjectSchema = createProjectBaseSchema.partial().extend({
   progress: z.number().min(0).max(100).optional(),
   spent: z.number().min(0).optional(),
 })
@@ -157,7 +159,7 @@ export type ProjectQueryInput = z.infer<typeof projectQuerySchema>
 // BUDGET SCHEMAS
 // ============================================
 
-export const createBudgetSchema = z.object({
+const createBudgetBaseSchema = z.object({
   projectId: z.string().min(1, 'Project ID is required'),
   category: z.string().min(2).max(100),
   allocated: z.number().positive('Allocated amount must be positive'),
@@ -165,14 +167,16 @@ export const createBudgetSchema = z.object({
   year: z.number().int().min(2000).max(2100),
   quarter: z.number().int().min(1).max(4).optional(),
   description: z.string().max(1000).optional(),
-}).refine((data) => data.spent <= data.allocated, {
+})
+
+export const createBudgetSchema = createBudgetBaseSchema.refine((data) => data.spent <= data.allocated, {
   message: 'Spent cannot exceed allocated amount',
   path: ['spent'],
 })
 
 export type CreateBudgetInput = z.infer<typeof createBudgetSchema>
 
-export const updateBudgetSchema = createBudgetSchema.partial()
+export const updateBudgetSchema = createBudgetBaseSchema.partial()
 
 export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>
 
