@@ -1,0 +1,3 @@
+{
+  "/api/geodata/[countryCode]/route": "app/api/geodata/[countryCode]/route.js"
+}
